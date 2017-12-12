@@ -126,6 +126,7 @@ public class PinotTableRestletResource {
   public String listTableConfigs(
   ) {
     try {
+
       List<String> rawTables = _pinotHelixResourceManager.getAllRawTables();
       Collections.sort(rawTables);
       JSONArray tableArray = new JSONArray(rawTables);
