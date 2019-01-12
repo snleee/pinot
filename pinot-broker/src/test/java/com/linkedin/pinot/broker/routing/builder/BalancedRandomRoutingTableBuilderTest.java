@@ -16,6 +16,7 @@
 package com.linkedin.pinot.broker.routing.builder;
 
 import com.linkedin.pinot.broker.routing.RoutingTableLookupRequest;
+import com.linkedin.pinot.broker.routing.selector.SegmentSelector;
 import com.linkedin.pinot.common.config.TableConfig;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -24,8 +25,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.commons.configuration.BaseConfiguration;
+import org.apache.helix.ZNRecord;
 import org.apache.helix.model.ExternalView;
 import org.apache.helix.model.InstanceConfig;
+import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
@@ -79,7 +82,7 @@ public class BalancedRandomRoutingTableBuilderTest {
     // Build routing table
     routingTableBuilder.computeOnExternalViewChange("dummy", externalView, instanceConfigList);
     RoutingTableLookupRequest request = new RoutingTableLookupRequest(tableNameWithType);
-    Map<String, List<String>> routingTable = routingTableBuilder.getRoutingTable(request);
+    Map<String, List<String>> routingTable = routingTableBuilder.getRoutingTable(request, null);
 
     Set<String> segmentsInRoutingTable = new HashSet<>();
     for (List<String> segments : routingTable.values()) {
@@ -89,6 +92,16 @@ public class BalancedRandomRoutingTableBuilderTest {
     // Check that we picked all segments from the table
     Set<String> expectedSegments = externalView.getPartitionSet();
     Assert.assertEquals(segmentsInRoutingTable, expectedSegments);
+
+    // Check non-default segment selector
+    SegmentSelector segmentSelector = new TestSegmentSelector();
+    routingTable = routingTableBuilder.getRoutingTable(request, segmentSelector);
+    segmentsInRoutingTable.clear();
+    for (List<String> segments : routingTable.values()) {
+      segmentsInRoutingTable.addAll(segments);
+    }
+    Assert.assertEquals(segmentsInRoutingTable.size(), externalView.getPartitionSet().size() - 1);
+    Assert.assertFalse(segmentsInRoutingTable.contains("segment_1"));
   }
 
   private ExternalView getDummyExternalView() {
@@ -111,5 +124,23 @@ public class BalancedRandomRoutingTableBuilderTest {
     instanceConfigList.add(new InstanceConfig("Server_1.2.3.5_2345"));
     instanceConfigList.add(new InstanceConfig("Server_1.2.3.6_3456"));
     return instanceConfigList;
+  }
+
+  class TestSegmentSelector implements SegmentSelector {
+
+    @Override
+    public void init(TableConfig tableConfig, ZkHelixPropertyStore<ZNRecord> propertyStore) {
+    }
+
+    @Override
+    public void computeOnExternalViewChange() {
+    }
+
+    @Override
+    public Set<String> selectSegments(RoutingTableLookupRequest request, Set<String> segmentsToQuery) {
+      Set<String> segments = new HashSet<>(segmentsToQuery);
+      segments.remove("segment_1");
+      return segments;
+    }
   }
 }

@@ -47,6 +47,7 @@ public class TableConfig {
   private static final String QUOTA_CONFIG_KEY = "quota";
   private static final String TASK_CONFIG_KEY = "task";
   private static final String ROUTING_CONFIG_KEY = "routing";
+  private static final String SEGMENT_MERGE_CONFIG_KEY = "segmentMergeConfig";
 
   @ConfigKey("name")
   @ConfigDoc(value = "The name for the table.", mandatory = true, exampleValue = "myTable")
@@ -78,6 +79,9 @@ public class TableConfig {
   @NestedConfig
   private RoutingConfig _routingConfig;
 
+  @NestedConfig
+  private SegmentMergeConfig _segmentMergeConfig;
+
   public TableConfig() {
     // TODO: currently these 2 fields are annotated as non-null. Revisit to see whether that's necessary
     _tenantConfig = new TenantConfig();
@@ -87,7 +91,8 @@ public class TableConfig {
   private TableConfig(@Nonnull String tableName, @Nonnull TableType tableType,
       @Nonnull SegmentsValidationAndRetentionConfig validationConfig, @Nonnull TenantConfig tenantConfig,
       @Nonnull IndexingConfig indexingConfig, @Nonnull TableCustomConfig customConfig,
-      @Nullable QuotaConfig quotaConfig, @Nullable TableTaskConfig taskConfig, @Nullable RoutingConfig routingConfig) {
+      @Nullable QuotaConfig quotaConfig, @Nullable TableTaskConfig taskConfig, @Nullable RoutingConfig routingConfig,
+      @Nullable SegmentMergeConfig segmentMergeConfig) {
     _tableName = TableNameBuilder.forType(tableType).tableNameWithType(tableName);
     _tableType = tableType;
     _validationConfig = validationConfig;
@@ -97,19 +102,18 @@ public class TableConfig {
     _quotaConfig = quotaConfig;
     _taskConfig = taskConfig;
     _routingConfig = routingConfig;
+    _segmentMergeConfig = segmentMergeConfig;
   }
 
   // For backward compatible
   @Deprecated
   @Nonnull
-  public static TableConfig init(@Nonnull String jsonConfigString)
-      throws IOException, JSONException {
+  public static TableConfig init(@Nonnull String jsonConfigString) throws IOException, JSONException {
     return fromJSONConfig(new JSONObject(jsonConfigString));
   }
 
   @Nonnull
-  public static TableConfig fromJSONConfig(@Nonnull JSONObject jsonConfig)
-      throws IOException, JSONException {
+  public static TableConfig fromJSONConfig(@Nonnull JSONObject jsonConfig) throws IOException, JSONException {
     TableType tableType = TableType.valueOf(jsonConfig.getString(TABLE_TYPE_KEY).toUpperCase());
     String tableName = TableNameBuilder.forType(tableType).tableNameWithType(jsonConfig.getString(TABLE_NAME_KEY));
     SegmentsValidationAndRetentionConfig validationConfig =
@@ -136,13 +140,17 @@ public class TableConfig {
           OBJECT_MAPPER.readValue(jsonConfig.getJSONObject(ROUTING_CONFIG_KEY).toString(), RoutingConfig.class);
     }
 
+    SegmentMergeConfig segmentMergeConfig = null;
+    if (jsonConfig.has(SEGMENT_MERGE_CONFIG_KEY)) {
+      segmentMergeConfig = OBJECT_MAPPER.readValue(jsonConfig.getJSONObject(SEGMENT_MERGE_CONFIG_KEY).toString(), SegmentMergeConfig.class);
+    }
+
     return new TableConfig(tableName, tableType, validationConfig, tenantConfig, indexingConfig, customConfig,
-        quotaConfig, taskConfig, routingConfig);
+        quotaConfig, taskConfig, routingConfig, segmentMergeConfig);
   }
 
   @Nonnull
-  public static JSONObject toJSONConfig(@Nonnull TableConfig tableConfig)
-      throws IOException, JSONException {
+  public static JSONObject toJSONConfig(@Nonnull TableConfig tableConfig) throws IOException, JSONException {
     JSONObject jsonConfig = new JSONObject();
     jsonConfig.put(TABLE_NAME_KEY, tableConfig._tableName);
     jsonConfig.put(TABLE_TYPE_KEY, tableConfig._tableType.toString());
@@ -160,12 +168,14 @@ public class TableConfig {
     if (tableConfig._routingConfig != null) {
       jsonConfig.put(ROUTING_CONFIG_KEY, new JSONObject(OBJECT_MAPPER.writeValueAsString(tableConfig._routingConfig)));
     }
+    if (tableConfig._segmentMergeConfig != null) {
+      jsonConfig.put(SEGMENT_MERGE_CONFIG_KEY, new JSONObject(OBJECT_MAPPER.writeValueAsString(tableConfig._segmentMergeConfig)));
+    }
     return jsonConfig;
   }
 
   @Nonnull
-  public static TableConfig fromZnRecord(@Nonnull ZNRecord znRecord)
-      throws IOException, JSONException {
+  public static TableConfig fromZnRecord(@Nonnull ZNRecord znRecord) throws IOException, JSONException {
     Map<String, String> simpleFields = znRecord.getSimpleFields();
     TableType tableType = TableType.valueOf(simpleFields.get(TABLE_TYPE_KEY).toUpperCase());
     String tableName = TableNameBuilder.forType(tableType).tableNameWithType(simpleFields.get(TABLE_NAME_KEY));
@@ -194,8 +204,14 @@ public class TableConfig {
       routingConfig = OBJECT_MAPPER.readValue(routingConfigString, RoutingConfig.class);
     }
 
+    String segmentMergeConfigString = simpleFields.get(SEGMENT_MERGE_CONFIG_KEY);
+    SegmentMergeConfig segmentMergeConfig = null;
+    if (segmentMergeConfigString != null) {
+      segmentMergeConfig = OBJECT_MAPPER.readValue(segmentMergeConfigString, SegmentMergeConfig.class);
+    }
+
     return new TableConfig(tableName, tableType, validationConfig, tenantConfig, indexingConfig, customConfig,
-        quotaConfig, taskConfig, routingConfig);
+        quotaConfig, taskConfig, routingConfig, segmentMergeConfig);
   }
 
   @Nonnull
@@ -217,6 +233,9 @@ public class TableConfig {
       }
       if (tableConfig._routingConfig != null) {
         simpleFields.put(ROUTING_CONFIG_KEY, OBJECT_MAPPER.writeValueAsString(tableConfig._routingConfig));
+      }
+      if (tableConfig._segmentMergeConfig != null) {
+        simpleFields.put(SEGMENT_MERGE_CONFIG_KEY, OBJECT_MAPPER.writeValueAsString(tableConfig._segmentMergeConfig));
       }
     } catch (IOException e) {
       throw new RuntimeException(e);
@@ -305,9 +324,17 @@ public class TableConfig {
     _routingConfig = routingConfig;
   }
 
+  @Nullable
+  public SegmentMergeConfig getSegmentMergeConfig() {
+    return _segmentMergeConfig;
+  }
+
+  public void setSegmentMergeConfig(SegmentMergeConfig segmentMergeConfig) {
+    _segmentMergeConfig = segmentMergeConfig;
+  }
+
   @Nonnull
-  public String toJSONConfigString()
-      throws IOException, JSONException {
+  public String toJSONConfigString() throws IOException, JSONException {
     return toJSONConfig(this).toString();
   }
 
@@ -332,17 +359,13 @@ public class TableConfig {
 
     TableConfig that = (TableConfig) o;
 
-    return EqualityUtils.isEqual(_tableName, that._tableName) &&
-        EqualityUtils.isEqual(_tableType, that._tableType) &&
-        EqualityUtils.isEqual(_validationConfig, that._validationConfig) &&
-        EqualityUtils.isEqual(_tenantConfig, that._tenantConfig) &&
-        EqualityUtils.isEqual(_indexingConfig, that._indexingConfig) &&
-        EqualityUtils.isEqual(_customConfig, that._customConfig) &&
-        EqualityUtils.isEqual(_quotaConfig, that._quotaConfig) &&
-        EqualityUtils.isEqual(_taskConfig, that._taskConfig) &&
-        EqualityUtils.isEqual(_routingConfig, that._routingConfig);
+    return EqualityUtils.isEqual(_tableName, that._tableName) && EqualityUtils.isEqual(_tableType, that._tableType)
+        && EqualityUtils.isEqual(_validationConfig, that._validationConfig) && EqualityUtils.isEqual(_tenantConfig,
+        that._tenantConfig) && EqualityUtils.isEqual(_indexingConfig, that._indexingConfig) && EqualityUtils.isEqual(
+        _customConfig, that._customConfig) && EqualityUtils.isEqual(_quotaConfig, that._quotaConfig)
+        && EqualityUtils.isEqual(_taskConfig, that._taskConfig) && EqualityUtils.isEqual(_routingConfig,
+        that._routingConfig);
   }
-
 
   @Override
   public int hashCode() {
@@ -402,8 +425,10 @@ public class TableConfig {
     private QuotaConfig _quotaConfig;
     private TableTaskConfig _taskConfig;
     private RoutingConfig _routingConfig;
+    private SegmentMergeConfig _segmentMergeConfig;
     private HllConfig _hllConfig;
     private StarTreeIndexSpec _starTreeIndexSpec;
+
 
     public Builder(TableType tableType) {
       _tableType = tableType;
@@ -555,8 +580,15 @@ public class TableConfig {
       return this;
     }
 
-    public TableConfig build()
-        throws IOException, JSONException {
+    public SegmentMergeConfig getSegmentMergeConfig() {
+      return _segmentMergeConfig;
+    }
+
+    public void setSegmentMergeConfig(SegmentMergeConfig segmentMergeConfig) {
+      _segmentMergeConfig = segmentMergeConfig;
+    }
+
+    public TableConfig build() throws IOException, JSONException {
       // Validation config
       SegmentsValidationAndRetentionConfig validationConfig = new SegmentsValidationAndRetentionConfig();
       validationConfig.setTimeColumnName(_timeColumnName);
@@ -605,7 +637,7 @@ public class TableConfig {
       }
 
       return new TableConfig(_tableName, _tableType, validationConfig, tenantConfig, indexingConfig, _customConfig,
-          _quotaConfig, _taskConfig, _routingConfig);
+          _quotaConfig, _taskConfig, _routingConfig, _segmentMergeConfig);
     }
   }
 }

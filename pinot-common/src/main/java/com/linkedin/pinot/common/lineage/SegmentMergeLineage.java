@@ -317,8 +317,7 @@ public class SegmentMergeLineage {
 
     // At this point, not all children groups are covered, cannot add group
     throw new InvalidConfigException("Cannot compute group level because not all children groups exist "
-        + "in the segment merge lineage, table name: " + _tableNameWithType + ", children groups: " + childrenGroups
-        + "table");
+        + "in the segment merge lineage, table name: " + _tableNameWithType + ", children groups: " + childrenGroups);
   }
 
   @Override

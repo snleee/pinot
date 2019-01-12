@@ -15,6 +15,7 @@
  */
 package com.linkedin.pinot.controller.helix.core;
 
+import com.fasterxml.uuid.Generators;
 import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -36,6 +37,8 @@ import com.linkedin.pinot.common.config.TenantConfig;
 import com.linkedin.pinot.common.data.Schema;
 import com.linkedin.pinot.common.exception.InvalidConfigException;
 import com.linkedin.pinot.common.exception.TableNotFoundException;
+import com.linkedin.pinot.common.lineage.SegmentMergeLineage;
+import com.linkedin.pinot.common.lineage.SegmentMergeLineageAccessHelper;
 import com.linkedin.pinot.common.messages.SegmentRefreshMessage;
 import com.linkedin.pinot.common.messages.SegmentReloadMessage;
 import com.linkedin.pinot.common.messages.TimeboundaryRefreshMessage;
@@ -82,6 +85,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import org.I0Itec.zkclient.exception.ZkBadVersionException;
 import org.apache.commons.configuration.Configuration;
 import org.apache.helix.AccessOption;
 import org.apache.helix.ClusterMessagingService;
@@ -145,8 +149,8 @@ public class PinotHelixResourceManager {
 
   public PinotHelixResourceManager(@Nonnull String zkURL, @Nonnull String helixClusterName,
       @Nonnull String controllerInstanceId, @Nonnull String dataDir) {
-    this(zkURL, helixClusterName, controllerInstanceId, dataDir, DEFAULT_EXTERNAL_VIEW_UPDATE_TIMEOUT_MILLIS,
-        false, false);
+    this(zkURL, helixClusterName, controllerInstanceId, dataDir, DEFAULT_EXTERNAL_VIEW_UPDATE_TIMEOUT_MILLIS, false,
+        false);
   }
 
   public PinotHelixResourceManager(@Nonnull ControllerConf controllerConf) {
@@ -1084,6 +1088,10 @@ public class PinotHelixResourceManager {
         _propertyStore.create(ZKMetadataProvider.constructPropertyStorePathForResource(tableNameWithType),
             new ZNRecord(tableNameWithType), AccessOption.PERSISTENT);
 
+        // Add segment merge lineage znode if required
+        _propertyStore.create(ZKMetadataProvider.constructPropertyStorePathForSegmentMergeLineage(tableNameWithType),
+            new ZNRecord(tableNameWithType), AccessOption.PERSISTENT);
+
         // Update replica group partition assignment to the property store if applicable
         updateReplicaGroupPartitionAssignment(tableConfig);
         break;
@@ -1524,7 +1532,7 @@ public class PinotHelixResourceManager {
 
     ClusterMessagingService messagingService = _helixZkManager.getMessagingService();
     LOGGER.info("Sending timeboundary refresh message for segment {} of table {}:{} to recipients {}", segmentName,
-            rawTableName, refreshMessage, recipientCriteria);
+        rawTableName, refreshMessage, recipientCriteria);
     // Helix sets the timeoutMs argument specified in 'send' call as the processing timeout of the message.
     int nMsgsSent = messagingService.send(recipientCriteria, refreshMessage, null, timeoutMs);
     if (nMsgsSent > 0) {
@@ -1534,7 +1542,7 @@ public class PinotHelixResourceManager {
       // May be the case when none of the brokers are up yet. That is OK, because when they come up they will get
       // the latest time boundary info.
       LOGGER.warn("Unable to send timeboundary refresh message for {} of table {}, nMsgs={}", segmentName,
-              offlineTableName, nMsgsSent);
+          offlineTableName, nMsgsSent);
     }
   }
 
@@ -2191,6 +2199,58 @@ public class PinotHelixResourceManager {
     }
     return endpointToInstance;
   }
+
+  public SegmentMergeLineage getSegmentMergeLineage(String tableNameWithType) {
+    ZNRecord segmentMergeLineageZNRecord =
+        SegmentMergeLineageAccessHelper.getSegmentMergeLineageZNRecord(getPropertyStore(), tableNameWithType);
+    return SegmentMergeLineage.fromZNRecord(segmentMergeLineageZNRecord);
+  }
+
+  public boolean updateSegmentMergeLineage(String tableNameWithType, List<String> segments,
+      List<String> childrenGroupIds) {
+    try {
+      DEFAULT_RETRY_POLICY.attempt(() -> {
+        // Fetch segment merge lineage from the property store
+        ZNRecord segmentMergeLineageZNRecord =
+            SegmentMergeLineageAccessHelper.getSegmentMergeLineageZNRecord(getPropertyStore(), tableNameWithType);
+        SegmentMergeLineage segmentMergeLineage = SegmentMergeLineage.fromZNRecord(segmentMergeLineageZNRecord);
+        int expectedVersion = segmentMergeLineageZNRecord.getVersion();
+
+        if (segmentMergeLineage == null) {
+          segmentMergeLineage = new SegmentMergeLineage(tableNameWithType);
+        }
+
+        // Add a new segment group
+        String groupId = Generators.timeBasedGenerator().generate().toString();
+        segmentMergeLineage.addSegmentGroup(groupId, segments, childrenGroupIds);
+
+        try {
+          if (SegmentMergeLineageAccessHelper.writeSegmentMergeLineage(getPropertyStore(), segmentMergeLineage,
+              expectedVersion)) {
+            return true;
+          } else {
+            LOGGER.warn("Failed to update segment merge lineage for table: {}", tableNameWithType);
+            return false;
+          }
+        } catch (ZkBadVersionException e) {
+          LOGGER.warn("Version changed while updating segment merge lineage for table: {}", tableNameWithType, e);
+          return false;
+        } catch (Exception e) {
+          LOGGER.warn("Caught exeception file while updating segment merge lineage for table: {}", tableNameWithType,
+              e);
+          return false;
+        }
+      });
+
+      LOGGER.info("Segment merge lineage has been updated successfully. (tableNameWithType: {}, segments: {}, "
+          + "childrenGroupIds: {})", tableNameWithType, segments, childrenGroupIds);
+      return true;
+    } catch (Exception e) {
+      LOGGER.error("Caught Exception while updating segment merge lineage for table: {}", tableNameWithType, e);
+      return false;
+    }
+  }
+
 
   /*
    * Uncomment and use for testing on a real cluster

@@ -15,6 +15,7 @@
  */
 package com.linkedin.pinot.controller.api.resources;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Preconditions;
 import com.linkedin.pinot.common.config.SegmentsValidationAndRetentionConfig;
 import com.linkedin.pinot.common.config.TableConfig;
@@ -515,5 +516,52 @@ public class PinotTableRestletResource {
       throw new ControllerApplicationException(LOGGER, e.getMessage(), Response.Status.BAD_REQUEST);
     }
     return ResourceUtils.convertToJsonString(result);
+  }
+
+  public static class LineageParameters {
+    @JsonProperty("segments")
+    List<String> segments;
+
+    @JsonProperty("childrenGroupIds")
+    List<String> childrenGroupIds;
+  }
+
+  @POST
+  @Produces(MediaType.APPLICATION_JSON)
+  @Path("/tables/{tableName}/segments/lineage")
+  @ApiOperation(value = "Updates segment merge lineage information", notes = "Updates segment merge lineage information")
+  public SuccessResponse updateSegmentMergeLineage(
+      @ApiParam(value = "Name of table to update segment merge lineage", required = true) @Nonnull @PathParam(value = "tableName") String tableName,
+      @ApiParam(value = "offline|realtime") @Nonnull @QueryParam("type") String tableType,
+      LineageParameters lineageParameters
+
+  ) {
+    if (!EnumUtils.isValidEnum(CommonConstants.Helix.TableType.class, tableType.toUpperCase())) {
+      throw new ControllerApplicationException(LOGGER, "Illegal table type " + tableType, Response.Status.BAD_REQUEST);
+    }
+
+    TableType type = TableType.valueOf(tableType.toUpperCase());
+    String tableNameWithType;
+    if (type == TableType.OFFLINE && _pinotHelixResourceManager.hasOfflineTable(tableName)) {
+      tableNameWithType = TableNameBuilder.OFFLINE.tableNameWithType(tableName);
+    } else if (type == TableType.REALTIME && _pinotHelixResourceManager.hasRealtimeTable(tableName)) {
+      tableNameWithType = TableNameBuilder.REALTIME.tableNameWithType(tableName);
+    } else {
+      throw new ControllerApplicationException(LOGGER, "Table " + tableName + ", type " + type + " does not exist",
+          Response.Status.NOT_FOUND);
+    }
+
+    boolean success =
+        _pinotHelixResourceManager.updateSegmentMergeLineage(tableNameWithType, lineageParameters.segments,
+            lineageParameters.childrenGroupIds);
+
+    if (success) {
+      return new SuccessResponse(
+          "Segment merge lineage has been updated successfully. (table: " + tableNameWithType + ", segments: "
+              + lineageParameters.segments + ", childrenGroups: " + lineageParameters.childrenGroupIds + ")");
+    } else {
+      throw new ControllerApplicationException(LOGGER, "Failed to update segment merge lineage for table: "
+          + tableNameWithType, Response.Status.INTERNAL_SERVER_ERROR);
+    }
   }
 }

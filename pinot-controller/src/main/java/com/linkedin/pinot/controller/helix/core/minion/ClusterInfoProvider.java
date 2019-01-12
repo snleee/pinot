@@ -20,6 +20,7 @@ import com.linkedin.pinot.common.config.PinotTaskConfig;
 import com.linkedin.pinot.common.config.TableConfig;
 import com.linkedin.pinot.common.config.TableNameBuilder;
 import com.linkedin.pinot.common.data.Schema;
+import com.linkedin.pinot.common.lineage.SegmentMergeLineage;
 import com.linkedin.pinot.common.metadata.ZKMetadataProvider;
 import com.linkedin.pinot.common.metadata.segment.OfflineSegmentZKMetadata;
 import com.linkedin.pinot.common.metadata.segment.RealtimeSegmentZKMetadata;
@@ -127,5 +128,10 @@ public class ClusterInfoProvider {
   @Nonnull
   public String getVipUrl() {
     return _controllerConf.generateVipUrl();
+  }
+
+
+  public SegmentMergeLineage getSegmentMergeLineage(String tableNameWithType) {
+    return _pinotHelixResourceManager.getSegmentMergeLineage(tableNameWithType);
   }
 }

@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import org.apache.commons.io.FileUtils;
+import org.apache.http.Header;
 import org.apache.http.NameValuePair;
 import org.apache.http.message.BasicNameValuePair;
 import org.slf4j.Logger;
@@ -58,6 +59,12 @@ public abstract class BaseMultipleSegmentsConversionExecutor extends BaseTaskExe
    */
   protected abstract List<SegmentConversionResult> convert(@Nonnull PinotTaskConfig pinotTaskConfig,
       @Nonnull List<File> originalIndexDir, @Nonnull File workingDir) throws Exception;
+
+  protected abstract void preprocessBeforeUpload(PinotTaskConfig pinotTaskConfig, List<SegmentConversionResult> conversionResults) throws Exception;
+
+  protected List<Header> getHttpHeaders() {
+    return null;
+  }
 
   @Override
   public List<SegmentConversionResult> executeTask(@Nonnull PinotTaskConfig pinotTaskConfig) throws Exception {
@@ -122,6 +129,10 @@ public abstract class BaseMultipleSegmentsConversionExecutor extends BaseTaskExe
             taskType + " on table: " + tableNameWithType + ", segments: " + inputSegmentNames + " got cancelled");
       }
 
+      preprocessBeforeUpload(pinotTaskConfig, segmentConversionResults);
+
+      List<Header> headers = getHttpHeaders();
+
       // Upload the tarred segments
       for (int i = 0; i < numOutputSegments; i++) {
         File convertedTarredSegmentFile = tarredSegmentFiles.get(i);
@@ -131,7 +142,7 @@ public abstract class BaseMultipleSegmentsConversionExecutor extends BaseTaskExe
         List<NameValuePair> parameters = Collections.singletonList(
             new BasicNameValuePair(FileUploadDownloadClient.QueryParameters.ENABLE_PARALLEL_PUSH_PROTECTION, "true"));
 
-        SegmentConversionUtils.uploadSegment(configs, null, parameters, tableNameWithType, resultSegmentName, uploadURL,
+        SegmentConversionUtils.uploadSegment(configs, headers, parameters, tableNameWithType, resultSegmentName, uploadURL,
             convertedTarredSegmentFile);
       }
 

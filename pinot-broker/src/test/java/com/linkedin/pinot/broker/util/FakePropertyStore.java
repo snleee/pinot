@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.linkedin.pinot.broker.routing;
+package com.linkedin.pinot.broker.util;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -40,6 +40,17 @@ public class FakePropertyStore extends ZkHelixPropertyStore<ZNRecord> {
   public void subscribeDataChanges(String path, IZkDataListener listener) {
     _listener = listener;
   }
+
+  @Override
+  public boolean set(String path, ZNRecord stat, int expectedVersion, int options) {
+    try {
+      setContents(path, stat);
+      return true;
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
 
   @Override
   public boolean set(String path, ZNRecord stat, int options) {

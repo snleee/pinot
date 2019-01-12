@@ -254,6 +254,9 @@ public class PinotSegmentUploadRestletResource {
     // Get URI of current segment location
     String currentSegmentLocationURI = headers.getHeaderString(FileUploadDownloadClient.CustomHeaders.DOWNLOAD_URI);
 
+    String mergedSegmentPushStr = headers.getHeaderString(FileUploadDownloadClient.CustomHeaders.MERGED_SEGMENT_PUSH);
+    boolean mergedSegmentPush = Boolean.valueOf(mergedSegmentPushStr);
+
     File tempEncryptedFile = null;
     File tempDecryptedFile = null;
     File tempSegmentDir = null;
@@ -315,7 +318,7 @@ public class PinotSegmentUploadRestletResource {
 
       // Zk operations
       completeZkOperations(enableParallelPushProtection, headers, tempEncryptedFile, provider, segmentMetadata,
-          segmentName, zkDownloadUri, moveSegmentToFinalLocation);
+          segmentName, zkDownloadUri, moveSegmentToFinalLocation, mergedSegmentPush);
 
       return new SuccessResponse("Successfully uploaded segment: " + segmentMetadata.getName() + " of table: "
           + segmentMetadata.getTableName());
@@ -373,7 +376,7 @@ public class PinotSegmentUploadRestletResource {
 
   private void completeZkOperations(boolean enableParallelPushProtection, HttpHeaders headers, File tempDecryptedFile,
       FileUploadPathProvider provider, SegmentMetadata segmentMetadata, String segmentName, String zkDownloadURI,
-      boolean moveSegmentToFinalLocation)
+      boolean moveSegmentToFinalLocation, boolean mergedSegmentPush)
       throws Exception {
     String finalSegmentPath =
         StringUtil.join("/", provider.getBaseDataDirURI().toString(), segmentMetadata.getTableName(),
@@ -381,7 +384,7 @@ public class PinotSegmentUploadRestletResource {
     URI finalSegmentLocationURI = new URI(finalSegmentPath);
     ZKOperator zkOperator = new ZKOperator(_pinotHelixResourceManager, _controllerConf, _controllerMetrics);
     zkOperator.completeSegmentOperations(segmentMetadata, finalSegmentLocationURI, tempDecryptedFile,
-        enableParallelPushProtection, headers, zkDownloadURI, moveSegmentToFinalLocation);
+        enableParallelPushProtection, headers, zkDownloadURI, moveSegmentToFinalLocation, mergedSegmentPush);
   }
 
   private void decryptFile(String crypterClassHeader, File tempEncryptedFile, File tempDecryptedFile) {

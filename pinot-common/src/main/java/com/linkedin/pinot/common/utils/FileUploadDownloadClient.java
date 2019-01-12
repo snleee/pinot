@@ -26,6 +26,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
 import javax.net.ssl.SSLContext;
@@ -52,6 +53,7 @@ import org.apache.http.entity.mime.content.InputStreamBody;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +72,7 @@ public class FileUploadDownloadClient implements Closeable {
     public static final String DOWNLOAD_URI = "DOWNLOAD_URI";
     public static final String SEGMENT_ZK_METADATA_CUSTOM_MAP_MODIFIER = "Pinot-SegmentZKMetadataCustomMapModifier";
     public static final String CRYPTER = "CRYPTER";
+    public static final String MERGED_SEGMENT_PUSH = "MERGED_SEGMENT_PUSH";
   }
 
   public static class QueryParameters {
@@ -94,6 +97,7 @@ public class FileUploadDownloadClient implements Closeable {
   private static final String SEGMENT_PATH = "/v2/segments";
   private static final String SEGMENT_METADATA_PATH = "/segmentmetadata";
   private static final String TABLES_PATH = "/tables";
+  private static final String LINEAGE_PATH = "/lineage";
   private static final String TYPE_DELIMITER = "?type=";
   private static final String SLASH = "/";
 
@@ -137,6 +141,12 @@ public class FileUploadDownloadClient implements Closeable {
     return getURI(HTTPS, host, port, SCHEMA_PATH);
   }
 
+  public static URI getUpdateSegmentMergeLineageHttpURI(String host, int port, String tableName, String type)
+      throws URISyntaxException {
+    String path = TABLES_PATH + SLASH + tableName + LINEAGE_PATH + TYPE_DELIMITER + type;
+    return getURI(HTTP, host, port, path);
+  }
+
   /**
    * This method calls the old segment upload endpoint. We will deprecate this behavior soon. Please call
    * getUploadSegmentHttpURI to construct your request.
@@ -154,7 +164,7 @@ public class FileUploadDownloadClient implements Closeable {
   public static URI getOldUploadSegmentHttpsURI(String host, int port) throws URISyntaxException {
     return getURI(HTTPS, host, port, OLD_SEGMENT_PATH);
   }
-  
+
   public static URI getUploadSegmentHttpURI(String host, int port) throws URISyntaxException {
     return getURI(HTTP, host, port, SEGMENT_PATH);
   }
@@ -220,6 +230,29 @@ public class FileUploadDownloadClient implements Closeable {
       @Nullable List<Header> headers, @Nullable List<NameValuePair> parameters, int socketTimeoutMs) {
     return getUploadFileRequest(HttpPost.METHOD_NAME, uri, getContentBody(segmentName, segmentFile), headers,
         parameters, socketTimeoutMs);
+  }
+
+  private static HttpUriRequest getUpdateSegmentMergeLineageRequest(URI uri, List<String> childrenGroupIds,
+      List<String> segments, int socketTimeoutMs) {
+    JSONObject jsonObject = new JSONObject();
+    JSONArray childrenGroupIdsJsonArray = new JSONArray();
+//    for (String groupId : childrenGroupIds) {
+//      childrenGroupIdsJsonArray.put(groupId);
+//    }
+    jsonObject.put("childrenGroupIds", childrenGroupIds);
+
+//    JSONArray segmentsJsonArray = new JSONArray();
+//    for (String segment : segments) {
+//      segmentsJsonArray.put(segment);
+//    }
+    jsonObject.put("segments", segments);
+
+    RequestBuilder requestBuilder = RequestBuilder.post(uri)
+        .setVersion(HttpVersion.HTTP_1_1)
+        .setHeader(HttpHeaders.CONTENT_TYPE, "application/json")
+        .setEntity(new StringEntity(jsonObject.toString(), ContentType.APPLICATION_JSON));
+    setTimeout(requestBuilder, socketTimeoutMs);
+    return requestBuilder.build();
   }
 
   private static HttpUriRequest getSendSegmentUriRequest(URI uri, String downloadUri, @Nullable List<Header> headers,
@@ -396,6 +429,11 @@ public class FileUploadDownloadClient implements Closeable {
   public SimpleHttpResponse uploadSegmentMetadata(URI uri, String segmentName, File segmentMetadataFile, @Nullable List<Header> headers,
       @Nullable List<NameValuePair> parameters, int socketTimeoutMs) throws IOException, HttpErrorStatusException {
     return sendRequest(getUploadSegmentMetadataRequest(uri, segmentName, segmentMetadataFile, headers, parameters, socketTimeoutMs));
+  }
+
+  public SimpleHttpResponse updateSegmentMergeLineage(URI uri, List<String> childrenGroupIds, List<String> segments, int socketTimeoutMs)
+      throws IOException, HttpErrorStatusException {
+    return sendRequest(getUpdateSegmentMergeLineageRequest(uri, childrenGroupIds, segments, socketTimeoutMs));
   }
 
 
@@ -594,5 +632,16 @@ public class FileUploadDownloadClient implements Closeable {
   @Override
   public void close() throws IOException {
     _httpClient.close();
+  }
+
+  public static void main(String[] args) {
+    List<String> list = new ArrayList<>();
+    list.add("aa");
+    list.add("bb");
+
+    JSONObject object = new JSONObject();
+    object.put("a", list);
+
+    System.out.println(object.toString());
   }
 }

@@ -25,6 +25,7 @@ public class MinionConstants {
   public static final String SEGMENT_NAME_KEY = "segmentName";
   public static final String DOWNLOAD_URL_KEY = "downloadURL";
   public static final String UPLOAD_URL_KEY = "uploadURL";
+  public static final String CONTROLLER_API_URL = "controllerApiUrl";
   public static final String URL_SEPARATOR = ",";
 
   /**
@@ -46,6 +47,13 @@ public class MinionConstants {
   public static class ConvertToRawIndexTask {
     public static final String TASK_TYPE = "ConvertToRawIndexTask";
     public static final String COLUMNS_TO_CONVERT_KEY = "columnsToConvert";
+  }
+
+  public static class SegmentMergeRollupTask {
+    public static final String TASK_TYPE = "SegmentMergeRollupTask";
+    public static final String MERGE_TYPE = "mergeType";
+    public static final String MERGED_SEGEMNT_NAME_KEY = "mergedSegmentNameKey";
+    public static final String GROUPS_TO_COVER_KEY = "groupsToCoverKey";
   }
 
   // Purges rows inside segment that match chosen criteria

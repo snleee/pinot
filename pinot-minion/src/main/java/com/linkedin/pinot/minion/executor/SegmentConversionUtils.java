@@ -17,18 +17,25 @@ package com.linkedin.pinot.minion.executor;
 import com.linkedin.pinot.common.exception.HttpErrorStatusException;
 import com.linkedin.pinot.common.utils.FileUploadDownloadClient;
 import com.linkedin.pinot.common.utils.SimpleHttpResponse;
+import com.linkedin.pinot.common.utils.retry.AttemptsExceededException;
+import com.linkedin.pinot.common.utils.retry.RetriableOperationException;
 import com.linkedin.pinot.common.utils.retry.RetryPolicies;
 import com.linkedin.pinot.common.utils.retry.RetryPolicy;
 import com.linkedin.pinot.core.common.MinionConstants;
 import com.linkedin.pinot.minion.MinionContext;
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import javax.net.ssl.SSLContext;
+import javax.validation.constraints.Min;
+import javax.ws.rs.HEAD;
 import org.apache.http.Header;
 import org.apache.http.HttpStatus;
+import org.apache.http.HttpVersion;
 import org.apache.http.NameValuePair;
+import org.apache.http.client.methods.RequestBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,5 +97,48 @@ public class SegmentConversionUtils {
         }
       });
     }
+  }
+
+  public static void uploadSegmentMergeLineage(Map<String, String> configs, String updateLineageUrl,
+      List<String> childrenSegmentGroups, List<String> segments) throws Exception {
+    String maxNumAttemptsConfig = configs.get(MinionConstants.MAX_NUM_ATTEMPTS_KEY);
+    int maxNumAttempts =
+        maxNumAttemptsConfig != null ? Integer.parseInt(maxNumAttemptsConfig) : DEFAULT_MAX_NUM_ATTEMPTS;
+    String initialRetryDelayMsConfig = configs.get(MinionConstants.INITIAL_RETRY_DELAY_MS_KEY);
+    long initialRetryDelayMs =
+        initialRetryDelayMsConfig != null ? Long.parseLong(initialRetryDelayMsConfig) : DEFAULT_INITIAL_RETRY_DELAY_MS;
+    String retryScaleFactorConfig = configs.get(MinionConstants.RETRY_SCALE_FACTOR_KEY);
+    double retryScaleFactor =
+        retryScaleFactorConfig != null ? Double.parseDouble(retryScaleFactorConfig) : DEFAULT_RETRY_SCALE_FACTOR;
+    RetryPolicy retryPolicy =
+        RetryPolicies.exponentialBackoffRetryPolicy(maxNumAttempts, initialRetryDelayMs, retryScaleFactor);
+
+    SSLContext sslContext = MinionContext.getInstance().getSSLContext();
+    try (FileUploadDownloadClient fileUploadDownloadClient = new FileUploadDownloadClient(sslContext)) {
+      retryPolicy.attempt(() -> {
+        try {
+          SimpleHttpResponse response =
+              fileUploadDownloadClient.updateSegmentMergeLineage(new URI(updateLineageUrl), childrenSegmentGroups,
+                  segments, FileUploadDownloadClient.DEFAULT_SOCKET_TIMEOUT_MS);
+          return true;
+        } catch (HttpErrorStatusException e) {
+          int statusCode = e.getStatusCode();
+          if (statusCode == HttpStatus.SC_CONFLICT || statusCode >= 500) {
+            // Temporary exception
+            return false;
+          } else {
+            // Permanent exception
+            throw e;
+          }
+        } catch (Exception e) {
+          return false;
+        }
+      });
+    }
+  }
+
+  public static void main(String[] args) {
+//    RequestBuilder requestBuilder = RequestBuilder.post("localhost:")
+    RequestBuilder requestBuilder = RequestBuilder.post("localhost:8998/table/");
   }
 }
