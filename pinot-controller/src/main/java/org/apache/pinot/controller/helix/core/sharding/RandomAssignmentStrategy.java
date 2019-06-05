@@ -27,6 +27,7 @@ import org.apache.helix.HelixManager;
 import org.apache.helix.ZNRecord;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.config.TagNameUtils;
+import org.apache.pinot.common.metadata.segment.SegmentZKMetadata;
 import org.apache.pinot.common.segment.SegmentMetadata;
 import org.apache.pinot.common.utils.helix.HelixHelper;
 import org.slf4j.Logger;
@@ -46,6 +47,20 @@ public class RandomAssignmentStrategy implements SegmentAssignmentStrategy {
   public List<String> getAssignedInstances(HelixManager helixManager, HelixAdmin helixAdmin,
       ZkHelixPropertyStore<ZNRecord> propertyStore, String tableNameWithType, String helixClusterName,
       SegmentMetadata segmentMetadata, int numReplicas, String tenantName) {
+    return getAssignedInstancesHelper(helixManager, tableNameWithType, numReplicas, tenantName,
+        segmentMetadata.getName());
+  }
+
+  @Override
+  public List<String> getAssignedInstances(HelixManager helixManager, HelixAdmin helixAdmin,
+      ZkHelixPropertyStore<ZNRecord> propertyStore, String helixClusterName, String tableNameWithType,
+      SegmentZKMetadata segmentZKMetadata, int numReplicas, String tenantName) {
+    return getAssignedInstancesHelper(helixManager, tableNameWithType, numReplicas, tenantName,
+        segmentZKMetadata.getSegmentName());
+  }
+
+  private List<String> getAssignedInstancesHelper(HelixManager helixManager, String tableNameWithType, int numReplicas,
+      String tenantName, String segmentName) {
     String serverTenantName = TagNameUtils.getOfflineTagForTenant(tenantName);
     final Random random = new Random(System.currentTimeMillis());
 
@@ -56,7 +71,7 @@ public class RandomAssignmentStrategy implements SegmentAssignmentStrategy {
       selectedInstanceList.add(allInstanceList.get(idx));
       allInstanceList.remove(idx);
     }
-    LOGGER.info("Segment assignment result for : " + segmentMetadata.getName() + ", in resource : " + tableNameWithType
+    LOGGER.info("Segment assignment result for : " + segmentName + ", in resource : " + tableNameWithType
         + ", selected instances: " + Arrays.toString(selectedInstanceList.toArray()));
 
     return selectedInstanceList;

@@ -31,6 +31,7 @@ import org.apache.helix.model.IdealState;
 import org.apache.helix.store.zk.ZkHelixPropertyStore;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.config.TagNameUtils;
+import org.apache.pinot.common.metadata.segment.SegmentZKMetadata;
 import org.apache.pinot.common.segment.SegmentMetadata;
 import org.apache.pinot.common.utils.Pairs;
 import org.apache.pinot.common.utils.Pairs.Number2ObjectPair;
@@ -49,6 +50,21 @@ public class BalanceNumSegmentAssignmentStrategy implements SegmentAssignmentStr
   public List<String> getAssignedInstances(HelixManager helixManager, HelixAdmin helixAdmin,
       ZkHelixPropertyStore<ZNRecord> propertyStore, String helixClusterName, String tableNameWithType,
       SegmentMetadata segmentMetadata, int numReplicas, String tenantName) {
+    return getAssignedInstancesHelper(helixManager, helixAdmin, helixClusterName,
+        tableNameWithType, segmentMetadata.getName(), numReplicas, tenantName);
+  }
+
+  @Override
+  public List<String> getAssignedInstances(HelixManager helixManager, HelixAdmin helixAdmin,
+      ZkHelixPropertyStore<ZNRecord> propertyStore, String helixClusterName, String tableNameWithType,
+      SegmentZKMetadata segmentZKMetadata, int numReplicas, String tenantName) {
+    return getAssignedInstancesHelper(helixManager, helixAdmin, helixClusterName, tableNameWithType,
+        segmentZKMetadata.getSegmentName(), numReplicas, tenantName);
+  }
+
+  private List<String> getAssignedInstancesHelper(HelixManager helixManager, HelixAdmin helixAdmin,
+      String helixClusterName, String tableNameWithType,
+      String segmentName, int numReplicas, String tenantName) {
     String serverTenantName = TagNameUtils.getOfflineTagForTenant(tenantName);
 
     List<String> selectedInstances = new ArrayList<>();
@@ -91,7 +107,7 @@ public class BalanceNumSegmentAssignmentStrategy implements SegmentAssignmentStr
       selectedInstances.add(priorityQueue.poll().getB());
     }
 
-    LOGGER.info("Segment assignment result for : " + segmentMetadata.getName() + ", in resource : " + tableNameWithType
+    LOGGER.info("Segment assignment result for : " + segmentName + ", in resource : " + tableNameWithType
         + ", selected instances: " + Arrays.toString(selectedInstances.toArray()));
     return selectedInstances;
   }
