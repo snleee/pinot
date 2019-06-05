@@ -30,6 +30,7 @@ import org.apache.pinot.common.config.ReplicaGroupStrategyConfig;
 import org.apache.pinot.common.config.TableConfig;
 import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.metadata.ZKMetadataProvider;
+import org.apache.pinot.common.metadata.segment.SegmentZKMetadata;
 import org.apache.pinot.common.partition.ReplicaGroupPartitionAssignment;
 import org.apache.pinot.common.partition.ReplicaGroupPartitionAssignmentGenerator;
 import org.apache.pinot.common.segment.SegmentMetadata;
@@ -66,15 +67,50 @@ public class ReplicaGroupSegmentAssignmentStrategy implements SegmentAssignmentS
     ReplicaGroupStrategyConfig replicaGroupStrategyConfig =
         tableConfig.getValidationConfig().getReplicaGroupStrategyConfig();
     boolean mirrorAssignmentAcrossReplicaGroups = replicaGroupStrategyConfig.getMirrorAssignmentAcrossReplicaGroups();
-
-    int partitionNumber = 0;
     String partitionColumn = replicaGroupStrategyConfig.getPartitionColumn();
+
+    // Read partition number for a segment
+    int partitionNumber = 0;
     if (partitionColumn != null) {
       // TODO: support multiple partitions
       partitionNumber =
           ((SegmentMetadataImpl) segmentMetadata).getColumnMetadataFor(partitionColumn).getPartitions().iterator()
               .next();
     }
+    return getAssignedInstancesHelper(propertyStore, tableNameWithType, segmentMetadata.getName(), numReplicas,
+        partitionNumber, mirrorAssignmentAcrossReplicaGroups);
+  }
+
+  @Override
+  public List<String> getAssignedInstances(HelixManager helixManager, HelixAdmin helixAdmin,
+      ZkHelixPropertyStore<ZNRecord> propertyStore, String helixClusterName, String tableNameWithType,
+      SegmentZKMetadata segmentZKMetadata, int numReplicas, String tenantName) {
+    // Fetch replica group strategy config
+    TableConfig tableConfig = ZKMetadataProvider.getTableConfig(propertyStore, tableNameWithType);
+    ReplicaGroupStrategyConfig replicaGroupStrategyConfig =
+        tableConfig.getValidationConfig().getReplicaGroupStrategyConfig();
+    boolean mirrorAssignmentAcrossReplicaGroups = replicaGroupStrategyConfig.getMirrorAssignmentAcrossReplicaGroups();
+    String partitionColumn = replicaGroupStrategyConfig.getPartitionColumn();
+
+    // Read partition number for a segment
+    int partitionNumber = 0;
+    if (partitionColumn != null) {
+      partitionNumber =
+          segmentZKMetadata.getPartitionMetadata().getColumnPartitionMap().get(partitionColumn).getPartitions()
+              .iterator().next();
+    }
+    return getAssignedInstancesHelper(propertyStore, tableNameWithType, segmentZKMetadata.getSegmentName(), numReplicas,
+        partitionNumber, mirrorAssignmentAcrossReplicaGroups);
+  }
+
+  private List<String> getAssignedInstancesHelper(ZkHelixPropertyStore<ZNRecord> propertyStore,
+      String tableNameWithType, String segmentName, int numReplicas, int partitionNumber,
+      boolean mirrorAssignmentAcrossReplicaGroups) {
+    // Fetch the partition mapping table from the property store.
+    ReplicaGroupPartitionAssignmentGenerator partitionAssignmentGenerator =
+        new ReplicaGroupPartitionAssignmentGenerator(propertyStore);
+    ReplicaGroupPartitionAssignment replicaGroupPartitionAssignment =
+        partitionAssignmentGenerator.getReplicaGroupPartitionAssignment(tableNameWithType);
 
     // Perform the segment assignment.
     // If mirror assignment is on, we randomly pick the index and use the same index for all replica groups.
@@ -97,7 +133,7 @@ public class ReplicaGroupSegmentAssignmentStrategy implements SegmentAssignmentS
       selectedInstanceList.add(instancesInReplicaGroup.get(index));
     }
 
-    LOGGER.info("Segment assignment result for : " + segmentMetadata.getName() + ", in resource : " + tableNameWithType
+    LOGGER.info("Segment assignment result for : " + segmentName + ", in resource : " + tableNameWithType
         + ", selected instances: " + Arrays.toString(selectedInstanceList.toArray()));
 
     return selectedInstanceList;
