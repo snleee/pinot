@@ -50,6 +50,9 @@ public class UploadSegmentCommand extends AbstractBaseAdminCommand implements Co
   @Option(name = "-segmentDir", required = true, metaVar = "<string>", usage = "Path to segment directory.")
   private String _segmentDir = null;
 
+  @Option(name = "-tableName", required = false, metaVar = "<string>", usage = "Table name to upload a segment.")
+  private String _tableName = null;
+
   @Option(name = "-help", required = false, help = true, aliases = {"-h", "--h", "--help"}, usage = "Print this message.")
   private boolean _help = false;
 
@@ -66,7 +69,7 @@ public class UploadSegmentCommand extends AbstractBaseAdminCommand implements Co
   @Override
   public String toString() {
     return ("UploadSegment -controllerHost " + _controllerHost + " -controllerPort " + _controllerPort + " -segmentDir "
-        + _segmentDir);
+        + _segmentDir + "-tableName " + _tableName);
   }
 
   @Override
@@ -127,7 +130,8 @@ public class UploadSegmentCommand extends AbstractBaseAdminCommand implements Co
         }
 
         LOGGER.info("Uploading segment {}", tgzFile.getName());
-        fileUploadDownloadClient.uploadSegment(uploadSegmentHttpURI, tgzFile.getName(), tgzFile);
+        fileUploadDownloadClient
+            .uploadSegmentWithTableNameHeader(uploadSegmentHttpURI, _tableName, tgzFile.getName(), tgzFile);
       }
     } finally {
       // Delete the temporary working directory.

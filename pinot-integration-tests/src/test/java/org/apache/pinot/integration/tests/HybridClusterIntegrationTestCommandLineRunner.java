@@ -298,7 +298,7 @@ public class HybridClusterIntegrationTestCommandLineRunner {
           _sortedColumn, _invertedIndexColumns, null, null, null, getStreamConsumerFactoryClassName());
 
       // Upload all segments
-      uploadSegments(_tarDir);
+      uploadSegments(getTableName(), _tarDir);
     }
 
     @Test

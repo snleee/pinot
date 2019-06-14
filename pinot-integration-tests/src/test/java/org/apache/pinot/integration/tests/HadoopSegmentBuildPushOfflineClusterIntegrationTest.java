@@ -56,6 +56,7 @@ public class HadoopSegmentBuildPushOfflineClusterIntegrationTest extends BaseClu
   @BeforeClass
   public void setUp()
       throws Exception {
+    System.out.println(_tempDir);
     TestUtils.ensureDirectoriesExistAndEmpty(_tempDir, _avroDir, _segmentDir, _tarDir);
 
     // Start the Pinot cluster

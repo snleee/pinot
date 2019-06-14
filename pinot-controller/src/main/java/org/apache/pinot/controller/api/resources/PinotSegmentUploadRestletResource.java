@@ -247,7 +247,6 @@ public class PinotSegmentUploadRestletResource {
   private SuccessResponse uploadSegment(FormDataMultiPart multiPart, boolean enableParallelPushProtection,
       HttpHeaders headers, Request request, boolean moveSegmentToFinalLocation) {
     if (headers != null) {
-      // TODO: Add these headers into open source hadoop jobs
       LOGGER.info("HTTP Header {} is {}", CommonConstants.Controller.SEGMENT_NAME_HTTP_HEADER,
           headers.getRequestHeader(CommonConstants.Controller.SEGMENT_NAME_HTTP_HEADER));
       LOGGER.info("HTTP Header {} is {}", CommonConstants.Controller.TABLE_NAME_HTTP_HEADER,
@@ -303,7 +302,15 @@ public class PinotSegmentUploadRestletResource {
           throw new UnsupportedOperationException("Unsupported upload type: " + uploadType);
       }
 
-      String rawTableName = segmentMetadata.getTableName();
+      // Fetch raw table name. Try to derive the table name from the header and then from segment metadata
+      String rawTableName = null;
+      List<String> tableNameHeader = headers.getRequestHeader(CommonConstants.Controller.TABLE_NAME_HTTP_HEADER);
+      if (tableNameHeader != null && tableNameHeader.size() == 1) {
+        rawTableName = headers.getRequestHeader(CommonConstants.Controller.TABLE_NAME_HTTP_HEADER).get(0);
+      } else {
+        // For backward compatibility
+//        rawTableName = segmentMetadata.getTableName();
+      }
 
       // This boolean is here for V1 segment upload, where we keep the segment in the downloadURI sent in the header.
       // We will deprecate this behavior eventually.

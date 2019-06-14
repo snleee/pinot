@@ -277,7 +277,7 @@ public class DeleteAPIHybridClusterIntegrationTest extends HybridClusterIntegrat
 
   private void repushOfflineSegments()
       throws Exception {
-    uploadSegments(_tarDir);
+    uploadSegments(getTableName(), _tarDir);
     waitForNumRows(nOfflineRows, CommonConstants.Helix.TableType.OFFLINE);
   }
 

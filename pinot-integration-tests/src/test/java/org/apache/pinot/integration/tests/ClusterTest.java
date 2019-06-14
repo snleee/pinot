@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.File;
 import java.net.URI;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +44,10 @@ import org.apache.commons.configuration.BaseConfiguration;
 import org.apache.commons.configuration.Configuration;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.commons.io.FileUtils;
+import org.apache.http.Header;
+import org.apache.http.HttpHeaders;
 import org.apache.http.HttpStatus;
+import org.apache.http.message.BasicHeader;
 import org.apache.pinot.broker.broker.helix.HelixBrokerStarter;
 import org.apache.pinot.common.config.IndexingConfig;
 import org.apache.pinot.common.config.TableConfig;
@@ -51,6 +55,7 @@ import org.apache.pinot.common.config.TableNameBuilder;
 import org.apache.pinot.common.config.TableTaskConfig;
 import org.apache.pinot.common.config.TenantConfig;
 import org.apache.pinot.common.data.Schema;
+import org.apache.pinot.common.utils.CommonConstants;
 import org.apache.pinot.common.utils.CommonConstants.Broker;
 import org.apache.pinot.common.utils.CommonConstants.Helix;
 import org.apache.pinot.common.utils.CommonConstants.Minion;
@@ -271,10 +276,11 @@ public abstract class ClusterTest extends ControllerTest {
    *
    * @param segmentDir Segment directory
    */
-  protected void uploadSegments(@Nonnull File segmentDir)
+  protected void uploadSegments(@Nonnull String rawTableName, @Nonnull File segmentDir)
       throws Exception {
     String[] segmentNames = segmentDir.list();
     Assert.assertNotNull(segmentNames);
+
     try (FileUploadDownloadClient fileUploadDownloadClient = new FileUploadDownloadClient()) {
       final URI uploadSegmentHttpURI = FileUploadDownloadClient.getUploadSegmentHttpURI(LOCAL_HOST, _controllerPort);
 
@@ -284,12 +290,17 @@ public abstract class ClusterTest extends ControllerTest {
       List<Future<Integer>> tasks = new ArrayList<>(numSegments);
       for (final String segmentName : segmentNames) {
         final File segmentFile = new File(segmentDir, segmentName);
+
+        final Header tableNameHeader = new BasicHeader(CommonConstants.Controller.TABLE_NAME_HTTP_HEADER, rawTableName);
+        final Header segmentNameHeader = new BasicHeader(CommonConstants.Controller.SEGMENT_NAME_HTTP_HEADER, segmentName);
+        final List<Header> headers = Arrays.asList(tableNameHeader, segmentNameHeader);
+
         tasks.add(executor.submit(new Callable<Integer>() {
           @Override
           public Integer call()
               throws Exception {
-            return fileUploadDownloadClient.uploadSegment(uploadSegmentHttpURI, segmentName, segmentFile)
-                .getStatusCode();
+            return fileUploadDownloadClient.uploadSegment(uploadSegmentHttpURI, segmentName, segmentFile, headers, null,
+                FileUploadDownloadClient.DEFAULT_SOCKET_TIMEOUT_MS).getStatusCode();
           }
         }));
       }

@@ -159,7 +159,7 @@ public class BackfillSegmentUtils {
   /**
    * Uploads the segment tar to the controller.
    */
-  public boolean uploadSegment(String segmentName, File segmentDir, File outputDir) {
+  public boolean uploadSegment(String rawTableName, String segmentName, File segmentDir, File outputDir) {
     boolean success = true;
 
     File segmentTar = new File(outputDir, segmentName + TAR_SUFFIX);
@@ -168,9 +168,9 @@ public class BackfillSegmentUtils {
       TarGzCompressionUtils.createTarGzOfDirectory(segmentDir.getAbsolutePath(), segmentTar.getAbsolutePath());
       LOGGER.info("Created tar of {} at {}", segmentDir.getAbsolutePath(), segmentTar.getAbsolutePath());
       try (FileUploadDownloadClient fileUploadDownloadClient = new FileUploadDownloadClient()) {
-        SimpleHttpResponse response = fileUploadDownloadClient.uploadSegment(
+        SimpleHttpResponse response = fileUploadDownloadClient.uploadSegmentWithTableNameHeader(
             FileUploadDownloadClient.getUploadSegmentHttpURI(_controllerHost, Integer.parseInt(_controllerPort)),
-            segmentName, segmentTar);
+            rawTableName, segmentName, segmentTar);
         int statusCode = response.getStatusCode();
         if (statusCode != HttpStatus.SC_OK) {
           success = false;
