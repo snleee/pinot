@@ -46,7 +46,6 @@ public abstract class SegmentZKMetadata implements ZKMetadata {
   protected static final String NULL = "null";
 
   private String _segmentName;
-  private String _tableName;
   private SegmentType _segmentType;
   private long _startTime = -1;
   private long _endTime = -1;
@@ -61,6 +60,9 @@ public abstract class SegmentZKMetadata implements ZKMetadata {
   private long _segmentUploadStartTime = -1;
   private Map<String, String> _customMap;
   private String _crypterName;
+
+  @Deprecated
+  private String _tableName;
 
   public SegmentZKMetadata() {
   }
@@ -103,10 +105,12 @@ public abstract class SegmentZKMetadata implements ZKMetadata {
     _segmentName = segmentName;
   }
 
+  @Deprecated
   public String getTableName() {
     return _tableName;
   }
 
+  @Deprecated
   public void setTableName(String tableName) {
     _tableName = tableName;
   }
