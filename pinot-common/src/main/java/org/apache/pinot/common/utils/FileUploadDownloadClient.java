@@ -446,6 +446,11 @@ public class FileUploadDownloadClient implements Closeable {
     return uploadSegment(uri, segmentName, segmentFile, null, null, DEFAULT_SOCKET_TIMEOUT_MS);
   }
 
+  public SimpleHttpResponse uploadSegment(URI uri, String segmentName, File segmentFile, List<Header> headers)
+      throws IOException, HttpErrorStatusException {
+    return uploadSegment(uri, segmentName, segmentFile, headers, null, DEFAULT_SOCKET_TIMEOUT_MS);
+  }
+
   /**
    * Upload segment with segment file input stream.
    *

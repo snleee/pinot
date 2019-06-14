@@ -31,6 +31,7 @@ import org.joda.time.Interval;
  */
 public interface SegmentMetadata {
 
+  @Deprecated
   String getTableName();
 
   String getTimeColumn();
