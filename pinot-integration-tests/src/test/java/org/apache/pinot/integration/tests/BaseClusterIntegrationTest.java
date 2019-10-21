@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.apache.commons.io.FileUtils;
@@ -46,6 +47,8 @@ import org.apache.pinot.common.utils.ZkStarter;
 import org.apache.pinot.core.realtime.impl.kafka.KafkaStarterUtils;
 import org.apache.pinot.core.realtime.stream.StreamDataServerStartable;
 import org.apache.pinot.util.TestUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.testng.Assert;
 
 
@@ -53,6 +56,7 @@ import org.testng.Assert;
  * Shared implementation details of the cluster integration tests.
  */
 public abstract class BaseClusterIntegrationTest extends ClusterTest {
+  private static final Logger LOGGER = LoggerFactory.getLogger(BaseClusterIntegrationTest.class);
 
   // Default settings
   private static final String DEFAULT_TABLE_NAME = "mytable";
@@ -367,17 +371,27 @@ public abstract class BaseClusterIntegrationTest extends ClusterTest {
   protected void waitForAllDocsLoaded(long timeoutMs)
       throws Exception {
     final long countStarResult = getCountStarResult();
+    final AtomicLong consumedRows = new AtomicLong();
     TestUtils.waitForCondition(new Function<Void, Boolean>() {
       @Nullable
       @Override
       public Boolean apply(@Nullable Void aVoid) {
         try {
-          return getCurrentCountStarResult() == countStarResult;
+          long currentResult = getCurrentCountStarResult();
+          if (currentResult == countStarResult) {
+            LOGGER.warn("Docs fully loaded");
+            return true;
+          } else {
+            LOGGER.warn("Not yet fully loaded current: {}, expected: {}", currentResult, countStarResult);
+            consumedRows.set(countStarResult);
+            return false;
+          }
         } catch (Exception e) {
+          LOGGER.error("Exception thrown while getting count star result.", e);
           return null;
         }
       }
-    }, timeoutMs, "Failed to load " + countStarResult + " documents");
+    }, timeoutMs, "Failed to load " + countStarResult + " documents. Consumed rows: " + consumedRows.get());
   }
 
   /**
