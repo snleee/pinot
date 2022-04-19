@@ -21,7 +21,7 @@
 <div align="center">
     
 <img src="https://imgur.com/GNevDZ0.png" align="center" alt="Apache Pinot"/>
-
+dsda`
 ---------------------------------------
 [![Build Status](https://github.com/apache/pinot/actions/workflows/pinot_tests.yml/badge.svg?event=push)](https://github.com/apache/pinot/actions/workflows/pinot_tests.yml)
 [![Release](https://img.shields.io/github/release/apache/pinot/all.svg)](https://pinot.apache.org/download/)
