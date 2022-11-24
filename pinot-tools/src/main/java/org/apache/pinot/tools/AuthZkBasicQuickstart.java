@@ -18,12 +18,14 @@
  */
 package org.apache.pinot.tools;
 
+import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.pinot.common.auth.AuthProviderUtils;
 import org.apache.pinot.core.auth.BasicAuthUtils;
+import org.apache.pinot.plugin.inputformat.orc.ORCRecordReader;
 import org.apache.pinot.spi.auth.AuthProvider;
 import org.apache.pinot.spi.plugin.PluginManager;
 
@@ -67,8 +69,16 @@ public class AuthZkBasicQuickstart extends Quickstart {
 
   public static void main(String[] args)
       throws Exception {
-    PluginManager.get().init();
-    new AuthZkBasicQuickstart().execute();
-    printStatus(Color.GREEN, "Default login credential to login controller is admin/verysecret.");
+//    PluginManager.get().init();
+//    new AuthZkBasicQuickstart().execute();
+//    printStatus(Color.GREEN, "Default login credential to login controller is admin/verysecret.");
+
+    ORCRecordReader reader = new ORCRecordReader();
+    reader.init(new File("/Users/seunghyun/test-data-orc/orc-downloaded"), null, null);
+    int count = 0;
+    while (reader.hasNext() && count < 100) {
+      System.out.println(reader.next());
+      count++;
+    }
   }
 }

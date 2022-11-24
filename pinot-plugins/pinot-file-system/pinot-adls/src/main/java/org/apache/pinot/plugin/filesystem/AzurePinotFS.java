@@ -50,8 +50,8 @@ import org.slf4j.LoggerFactory;
 
 
 /**
- * Azure implementation for the PinotFS interface. This class will implement using azure-data-lake libraries all
- * the basic FS methods needed within Pinot.
+ * Azure Data Lake Gen 1 implementation for the PinotFS interface. This class will implement using azure-data-lake
+ * libraries all the basic FS methods needed within Pinot.
  */
 public class AzurePinotFS extends BasePinotFS {
   private static final Logger LOGGER = LoggerFactory.getLogger(AzurePinotFS.class);
