@@ -19,10 +19,14 @@
 package org.apache.pinot.controller.recommender.rules.impl;
 
 import com.google.common.util.concurrent.AtomicDouble;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import org.apache.pinot.common.request.context.ExpressionContext;
 import org.apache.pinot.common.request.context.FilterContext;
@@ -33,9 +37,14 @@ import org.apache.pinot.controller.recommender.rules.AbstractRule;
 import org.apache.pinot.controller.recommender.rules.io.params.NoDictionaryOnHeapDictionaryJointRuleParams;
 import org.apache.pinot.controller.recommender.rules.utils.FixedLenBitset;
 import org.apache.pinot.core.query.request.context.QueryContext;
+import org.apache.pinot.segment.local.segment.readers.PinotSegmentRecordReader;
+import org.apache.pinot.segment.spi.SegmentMetadata;
+import org.apache.pinot.segment.spi.index.metadata.SegmentMetadataImpl;
+import org.apache.pinot.spi.data.readers.GenericRow;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static java.lang.Math.max;
 import static org.apache.pinot.controller.recommender.rules.io.params.RecommenderConstants.REALTIME;
 
 
@@ -232,5 +241,67 @@ public class NoDictionaryOnHeapDictionaryJointRule extends AbstractRule {
 
   private FixedLenBitset mutableEmptySet() {
     return new FixedLenBitset(_input.getNumCols());
+  }
+
+  public static void main(String[] args)
+      throws IOException {
+    PinotSegmentRecordReader reader = new PinotSegmentRecordReader();
+    reader.init(new File("/Users/seunghyun/matic_seg"), null, null);
+
+    SegmentMetadataImpl segmentMetadata = new SegmentMetadataImpl(new File("/Users/seunghyun/matic_seg"));
+    int totalDocs = segmentMetadata.getTotalDocs();
+
+    Random random = new Random();
+    List<GenericRow> samples = new ArrayList<>();
+    String columnNames = "block_number,gas,gas_price,max_fee_per_gas,max_priority_fee_per_gas,nonce,transaction_index,transaction_type,value";
+    String[] columnNamesSplit = columnNames.split(",");
+    List<String> columns = new ArrayList<>();
+    for (String col : columnNamesSplit) {
+      columns.add(col.trim());
+    }
+
+//    List<String> columns = List.of( "block_number", "gas", "gas_price");
+
+    int numSamples = 1000;
+    for (int i = 0; i < numSamples; i++) {
+      GenericRow row = new GenericRow();
+      reader.getRecord(i, row);
+      samples.add(row);
+    }
+
+    System.out.println(totalDocs);
+    Map<String, Set<String>> cardinalityMap = new HashMap<>();
+
+    for (GenericRow row: samples) {
+      System.out.println(row);
+
+      for (String column: columns) {
+        String columnValue;
+        if (row.getValue(column) == null) {
+          columnValue = "null";
+        } else {
+          columnValue = row.getValue(column).toString();
+        }
+        Set<String> cardinality = cardinalityMap.computeIfAbsent(column, v -> new HashSet<>());
+        cardinality.add(columnValue);
+      }
+    }
+
+    for (String column : columns) {
+      long cardinalityFromSample = cardinalityMap.get(column).size();
+      long estimatedCardinality = Math.round((cardinalityFromSample / (1.0 * numSamples)) * totalDocs);
+      long realCardinality = segmentMetadata.getColumnMetadataFor(column).getCardinality();
+      System.out.println(
+          "cardinality estimation - " + column + ", " + cardinalityMap.get(column).size() + " / " + estimatedCardinality
+              + " / " + realCardinality + " / " + totalDocs + ", " + "ratio: " + cardinalityMap.get(column).size() / (
+              numSamples * 1.0) + " / " + realCardinality / (1.0 * totalDocs));
+
+      int dictionaryEncodedForwardIndexSizePerEntry = max((int) Math.ceil(Math.log(cardinalityFromSample) / (8 * Math.log(2))), 1);;
+      long dictionarySize = (long) Math.ceil(cardinalityFromSample * segmentMetadata.getColumnMetadataFor(column).getDataType().size());
+      long dictionaryEstimatedSize = (long) Math.ceil(numSamples * dictionaryEncodedForwardIndexSizePerEntry + dictionarySize);
+
+      long noDictionaryEstimatedSize = segmentMetadata.getColumnMetadataFor(column).getDataType().size() * numSamples;
+      System.out.println("dictionary size estimation - " + column + ", " + noDictionaryEstimatedSize + " / " + dictionaryEstimatedSize);
+    }
   }
 }
